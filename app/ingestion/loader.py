@@ -16,7 +16,8 @@
 # 如果文档都特别长想加速处理可以用1500–2000
 #
 # chunk_overlap是相邻两个chunk之间的重叠字符数。
-# 比如chunk_size = 1000，chunk_overlap = 200
+# 比如chunk_size = 1000，chunhostname -I
+k_overlap = 200
 #
 # 切出来是这样的
 # 第1块：0 ~ 999
@@ -82,6 +83,31 @@ def split_docs(docs: List[Document]) -> List[Document]:
 		chunk_overlap=settings.chunk_overlap
 	)
 	return splitter.split_documents(docs)
+
+# 第一个函数主要是为了应对后续文件单独追加而设计的，他就是处理一个单独的文件而已。
+def load_single_file(path: Path) -> List[Document]:
+    """根据文件后缀加载文件，返回LangChain的 Document列表"""
+    suf = path.suffix.lower()
+    if suf == ".pdf":
+        return load_pdf(path)
+    if suf in [".docx", ".doc"]:
+        return load_docx(path)
+    if suf in [".md", ".txt"]:
+        text = path.read_text(encoding="utf-8")
+        return [Document(page_content=text, metadata={"source": str(path)})] if text.strip() else []
+    return []
+
+# 第二个函数主要是把一批Document切成小块，并且给每一小块贴上权限标签visibility和文档ID。
+def split_with_visibility(docs: List[Document], visibility: str, doc_id: str | None = None) -> List[Document]:
+    chunks = split_docs(docs)
+    for c in chunks:
+        c.metadata = dict(c.metadata or {})
+        c.metadata["visibility"] = visibility
+        if doc_id:
+            c.metadata["doc_id"] = doc_id
+    return chunks
+
+
 
 if __name__ == "__main__":
 	for l in load_docs('../../data'):
