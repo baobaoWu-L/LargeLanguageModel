@@ -34,7 +34,7 @@ def decide_retrieve_node(state: QAState) -> dict:
 
 # ---------- retrieval / generation ----------
 
-def retrieve(state: QAState) -> dict:
+def retrieve_node(state: QAState) -> dict:
     """从 Chroma 检索相关文档。
 
     先按 visibility 做过滤；如果元数据里没有该字段导致检索为空，则回退到无过滤检索。
@@ -68,7 +68,7 @@ def grade_evidence(state: QAState) -> str:
     return "good" if state.get("docs") else "bad"
 
 
-def generate_answer(state: QAState) -> dict:
+def generate_answer_node(state: QAState) -> dict:
     """带引用生成答案。"""
     llm = get_llm()
     docs = state.get("docs", [])
@@ -87,7 +87,7 @@ def generate_answer(state: QAState) -> dict:
     return {"answer": ans}
 
 
-def refuse_or_clarify(state: QAState) -> dict:
+def refuse_or_clarify_node(state: QAState) -> dict:
     """无证据兜底。"""
     return {
         "answer": "我没有在当前可见知识库中找到足够证据回答。请提供更具体的关键词/文档来源。"
@@ -99,9 +99,9 @@ def build_qa_graph():
 
     # 注意：节点注册用 runnable（返回 dict）
     g.add_node("decide_retrieve", decide_retrieve_node)
-    g.add_node("retrieve", retrieve)
-    g.add_node("generate", generate_answer)
-    g.add_node("refuse", refuse_or_clarify)
+    g.add_node("retrieve", retrieve_node)
+    g.add_node("generate", generate_answer_node)
+    g.add_node("refuse", refuse_or_clarify_node)
 
     # START -> decide_retrieve
     g.add_edge(START, "decide_retrieve")
