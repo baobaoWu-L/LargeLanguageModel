@@ -118,3 +118,4 @@ def root():
 
 # class ChatReq(BaseModel):
 # uvicorn app.main:app --reload --port 8002 启动服务器
+# uvicorn app.main:app --reload --host 0.0.0.0 --port 8002

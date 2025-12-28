@@ -23,7 +23,7 @@ def validate_leave(req: Dict[str, Any], balance_days: float = 5.0) -> Tuple[List
     if end <= start:
         violations.append("结束时间必须晚于开始时间")
 
-    duration = (end - start).total_seconds() / 3600.0 / 24.0
+    duration = (end - start).total_seconds() / 3600.0 / 8.0
     if duration < 0.5:
         violations.append("最小请假单位为 0.5 天")
 
