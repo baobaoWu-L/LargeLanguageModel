@@ -31,4 +31,4 @@ INSERT INTO leave_balances(requester, annual_days, sick_days, personal_days)
 VALUES('LoveBreaker', 6.5, 10, 3)
 ON DUPLICATE KEY UPDATE annual_days=6.5;
 
-
+delete from leave_requests where id = 3;
