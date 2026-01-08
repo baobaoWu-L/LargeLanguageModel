@@ -1,3 +1,4 @@
+# ========= Prompts =========
 SLOT_SYSTEM = (
     "你是企业HR请假助手。"
     "你的任务是从用户请假描述中抽取结构化信息。"
@@ -27,7 +28,6 @@ TIME_SYSTEM = (
     "请把中文自然语言中的请假时间解析为 ISO 8601 start_time/end_time。"
     "只输出JSON，不要解释。"
 )
-
 # NOTE: 双大括号避免 .format() KeyError
 TIME_USER = """现在时间是：{now}
 用户文本：{text}

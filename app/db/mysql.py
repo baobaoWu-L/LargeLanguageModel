@@ -1,4 +1,6 @@
 import os
+from typing import Any
+
 import pymysql
 from contextlib import contextmanager
 
@@ -67,6 +69,45 @@ def cancel_leave_request(leave_id: str) -> bool:
                 (leave_id,)
             )
             return cur.rowcount > 0
+def get_recent_leave_requests(requester: str, limit: int = 5) -> tuple[tuple[Any, ...], ...]:
+    limit = max(1, min(int(limit), 20))  # 我们查询的时候最多一次查询20条
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT leave_id, leave_type, start_time, end_time, duration_days, status, reason, created_at "
+                "FROM leave_requests WHERE requester=%s "
+                "ORDER BY id DESC LIMIT %s",
+                (requester, limit),
+            )
+            return cur.fetchall()
 
+
+def update_leave_request(leave_id: str, fields: dict) -> bool:
+    """
+
+    Only update PENDING requests.
+    fields can include: leave_type, start_time, end_time, duration_days, reason
+    """
+    allowed = {"leave_type", "start_time", "end_time", "duration_days", "reason"}
+    sets = []  # sets里放的是过滤出来的能改的那些列的名字
+    params = []  # params里放的sets对应的那些列的值
+    for k, v in fields.items():
+        if k in allowed and v is not None:
+            sets.append(f"{k}=%s")  # sets=['leave_type=%s', 'end_time=%s']
+            params.append(v)  # params=['年假', 'xx年月日']
+
+    if not sets:
+        return False
+
+    params.extend([leave_id])
+    sql = (
+        "UPDATE leave_requests SET " + ", ".join(sets) +
+        " WHERE leave_id=%s AND status='PENDING'"
+    )
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, tuple(params))
+            return cur.rowcount > 0
 
 # print(get_leave_balance('LoveBreaker'))

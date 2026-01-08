@@ -5,12 +5,11 @@ import uuid
 import re
 from datetime import datetime
 from typing import Any, Dict
-
+from app.prompts.prompt import TIME_SYSTEM, TIME_USER, SLOT_SYSTEM, SLOT_USER
 from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.deps import get_llm
-from app.prompts.prompt import TIME_SYSTEM, TIME_USER, SLOT_SYSTEM, SLOT_USER
 from app.workflows.leave.models import LeaveState
 from app.workflows.leave.rules import validate_leave
 from app.db.mysql import (
@@ -18,13 +17,26 @@ from app.db.mysql import (
     insert_leave_request,
     get_leave_request,
     cancel_leave_request,
+    get_recent_leave_requests,
+    update_leave_request,
 )
 
 # ========= Helpers =========
+def _extract_limit(text: str, default: int = 5) -> int:
+    if not text:
+        return default
+    m = re.search(r"(\d+)\s*条", text)
+    if not m:
+        m = re.search(r"最近\s*(\d+)", text)
+    if m:
+        try:
+            return int(m.group(1))
+        except Exception:
+            return default
+    return default
 
 def _safe_json_load(s: str) -> Dict[str, Any]:
-    # 这段代码需要根据具体的大模型的输出做调整
-    if not s:  # s这个参数里是空的就返回空字典
+    if not s:
         return {}
     s = s.strip()
     if s.startswith("```"):
@@ -32,12 +44,11 @@ def _safe_json_load(s: str) -> Dict[str, Any]:
         if s.lower().startswith("json"):
             s = s[4:].strip()
     try:
-        return json.loads(s)  # loads将str的json变成python的字典
+        return json.loads(s)
     except Exception:
         return {}
 
 def _safe_iso(s: Any) -> str | None:
-    # 这个函数为了校验s表示的是不是一个合法的日期时间
     if not s or not isinstance(s, str):
         return None
     s = s.strip()
@@ -48,13 +59,10 @@ def _safe_iso(s: Any) -> str | None:
         return None
 
 def _extract_leave_id(text: str) -> str | None:
-    # 从大模型的结果中，将工单LV-这个内容抽出来
     if not text:
         return None
     m = re.search(r"\bLV-[0-9a-fA-F]{6,12}\b", text)
-    # re.search用来查找text中有没有符合第一个参数的内容
-    # m不是查找的结果，它只是一个包含查询结果的对象
-    return m.group(0) if m else None  # m.group(0)才是将查出来的结果取出来
+    return m.group(0) if m else None
 
 # ========= Intent Routing =========
 
@@ -69,6 +77,12 @@ def decide_intent(state: LeaveState) -> str:
         if any(k in text for k in ["请假", "年假", "病假", "事假", "休假", "调休", "假期", "申请", "单"]):
             return "query"
 
+    if any(k in text for k in ["最近", "列表", "我的请假", "请假记录", "历史请假"]) and \
+            any(k in text for k in ["请假", "年假", "病假", "事假", "休假", "假期", "记录"]):
+        return "list"
+
+    if any(k in text for k in ["修改", "变更", "调整", "改期", "改到", "改为"]):
+        return "modify"
     return "apply"
 
 def intent_node(state: LeaveState) -> dict:
@@ -221,6 +235,112 @@ def create_leave_node(state: LeaveState) -> dict:
     insert_leave_request(req_to_save)
     return {"leave_id": leave_id, "answer": f"已提交请假申请，编号 {leave_id}，等待审批。"}
 
+def list_leave_node(state: LeaveState) -> dict:
+    text = state.get("text") or state.get("question") or ""
+    requester = state.get("requester", "anonymous")
+    limit = _extract_limit(text, default=5)
+
+    rows = get_recent_leave_requests(requester, limit=limit)
+    if not rows:
+        return {"answer": "你还没有请假记录。"}
+
+    lines = [f"最近 {len(rows)} 条请假记录："]
+    for r in rows:
+        lines.append(
+            f"- {r['leave_id']} | {r['leave_type']} | "
+            f"{r['start_time']} ~ {r['end_time']} | "
+            f"{r['duration_days']}天 | {r['status']}"
+        )
+    return {"answer": "\n".join(lines)}
+
+def modify_leave_node(state: LeaveState) -> dict:
+    text = state.get("text") or state.get("question") or ""
+    requester = state.get("requester", "anonymous")
+
+    leave_id = state.get("leave_id") or _extract_leave_id(text)
+    if not leave_id:
+        return {"answer": "请提供要修改的请假编号（例如 LV-xxxxxxx）。"}
+
+    old = get_leave_request(leave_id)
+    if not old:
+        return {"answer": f"未找到编号为 {leave_id} 的请假申请。"}
+    if old["status"] != "PENDING":
+        return {"answer": f"{leave_id} 不是待审批状态，无法修改（当前：{old['status']}）。"}
+
+    # 1) 基于旧单构造 base req
+    base_req = {
+        "leave_type": old["leave_type"],
+        "start_time": old["start_time"].strftime("%Y-%m-%d %H:%M"),
+        "end_time": old["end_time"].strftime("%Y-%m-%d %H:%M"),
+        "reason": old.get("reason"),
+        "requester": old["requester"],
+    }
+
+    llm = get_llm()
+
+    # 2) LLM 抽 leave_type / ISO 时间（如果用户给了）
+    raw_slots = llm.invoke([
+        SystemMessage(content=SLOT_SYSTEM),
+        HumanMessage(content=SLOT_USER.format(text=text)),
+    ]).content
+    slots = _safe_json_load(raw_slots)
+
+    # 3) LLM 解析相对时间（如果用户只说“下周二/明天下午”）
+    raw_time = llm.invoke([
+        SystemMessage(content=TIME_SYSTEM),
+        HumanMessage(content=TIME_USER.format(
+            now=datetime.now().strftime("%Y-%m-%d %H:%M"),
+            text=text
+        )),
+    ]).content
+    tdata = _safe_json_load(raw_time)
+
+    new_req = dict(base_req)
+    # 优先用 slots 里的 ISO；slots 没有则用相对时间解析结果
+    new_req["leave_type"] = slots.get("leave_type") or new_req["leave_type"]
+
+    st = _safe_iso(slots.get("start_time")) or _safe_iso(tdata.get("start_time"))
+    et = _safe_iso(slots.get("end_time")) or _safe_iso(tdata.get("end_time"))
+    if st:
+        new_req["start_time"] = st
+    if et:
+        new_req["end_time"] = et
+
+    new_req["reason"] = slots.get("reason") or new_req["reason"]
+
+    # 4) validate（余额 + 规则）
+    bal = get_leave_balance(requester) or {}
+    annual_balance = float(bal.get("annual_days", 0))
+    missing, violations = validate_leave(new_req, balance_days=annual_balance)
+    if missing or violations:
+        tips = []
+        if missing:
+            tips.append("缺少信息：" + "、".join(missing))
+        if violations:
+            tips.append("规则问题：" + "；".join(violations))
+        return {"answer": "；".join(tips) + "。请重新描述修改内容。"}
+
+    # 5) 落库 update
+    ok = update_leave_request(leave_id, {
+        "leave_type": new_req["leave_type"],
+        "start_time": new_req["start_time"],
+        "end_time": new_req["end_time"],
+        "duration_days": new_req.get("duration_days"),
+        "reason": new_req.get("reason"),
+    })
+    if not ok:
+        return {"answer": "修改失败：该单可能已被审批或取消。"}
+
+    return {
+        "leave_id": leave_id,
+        "answer": (
+            f"已修改请假单 {leave_id}：\n"
+            f"- 类型：{new_req['leave_type']}\n"
+            f"- 开始：{new_req['start_time']}\n"
+            f"- 结束：{new_req['end_time']}\n"
+            f"- 原因：{new_req.get('reason') or '无'}"
+        )
+    }
 # ========= Build Graph =========
 
 def build_leave_graph():
@@ -230,6 +350,7 @@ def build_leave_graph():
     g.add_node("intent", intent_node)
     g.add_node("query", query_leave_node)
     g.add_node("cancel", cancel_leave_node)
+    g.add_node("list", list_leave_node)
 
     # apply-flow
     g.add_node("parse_time", parse_time_node)
@@ -238,17 +359,24 @@ def build_leave_graph():
     g.add_node("need_info", need_info_node)
     g.add_node("confirm", confirm_node)
     g.add_node("create", create_leave_node)
+    g.add_node("modify", modify_leave_node)
 
     g.add_edge(START, "intent")
-
     g.add_conditional_edges(
         "intent",
         decide_intent,
-        {"apply": "parse_time", "query": "query", "cancel": "cancel"},
+        {
+            "apply": "parse_time",
+            "query": "query",
+            "cancel": "cancel",
+            "list": "list",
+            "modify": "modify",
+        },
     )
 
     g.add_edge("parse_time", "extract")
     g.add_edge("extract", "validate")
+    g.add_edge("list", END)
 
     g.add_conditional_edges(
         "validate",
@@ -266,5 +394,6 @@ def build_leave_graph():
     g.add_edge("cancel", END)
     g.add_edge("need_info", END)
     g.add_edge("create", END)
+    g.add_edge("modify", END)
 
     return g.compile()
