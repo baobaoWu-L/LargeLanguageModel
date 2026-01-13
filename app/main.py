@@ -17,14 +17,16 @@ from pathlib import Path
 from typing import Optional
 import chromadb
 
+from app.api.rbac_api import router as rbac_router
 from app.db.redis_session import load_session, save_session
 from app.auth import router as auth_router, UserInDB, get_current_user_optional, get_current_user
-from app.rbac import get_user_roles, get_user_permissions
-from app.perm import require_permission
+from app.db.rbac_db import get_user_roles, get_user_permissions
+from app.security1.rbac.perm import require_permission
 SESSIONS: dict[str, dict] = {}  # # ⚠️加这一行
 
 app = FastAPI(title="Enterprise KB Assistant")
 app.include_router(auth_router)
+app.include_router(rbac_router)
 
 DATA_DOCS_DIR = Path("./data/docs")
 DATA_DOCS_DIR.mkdir(parents=True, exist_ok=True)
@@ -219,3 +221,31 @@ def root():
 # curl -X POST http://127.0.0.1:8002/chat \
 #   -H "Content-Type: application/json" \
 #   -d '{"text":"查我的请假状态 LV-c4eda0c8","user_role":"public","requester":"LoveBreaker"}'
+
+# TOKEN =$(curl - s - X POST http: // 127.0.0.1:8002 / auth / login \
+#     -H 'Content-Type: application/json' \
+#     -d '{"username":"LoveBreaker","password":"123456"}' | jq -r.access_token)
+# echo $TOKEN
+
+
+# ADMIN_TOKEN =$(curl - s - X POST http: // 127.0.0.1:8002 / auth / login \
+#     -H 'Content-Type: application/json' \
+#     -d '{"username":"admin","password":"123456"}' | jq -r.access_token)
+# echo $ADMIN_TOKEN
+
+#
+#
+#
+# curl - s
+# http: // 127.0
+# .0
+# .1: 8002 / rbac / roles \
+#     - H
+# "Authorization: Bearer $TOKEN" | jq
+#
+# curl - s
+# http: // 127.0
+# .0
+# .1: 8002 / rbac / roles \
+#     - H
+# "Authorization: Bearer $ADMIN_TOKEN" | jq
