@@ -3,11 +3,12 @@
 # from app.router_graph import router_graph
 
 
-from __future__ import annotations
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from pydantic import BaseModel
+
+
 from app.router_graph import router_graph
-from app.deps import get_vs,get_embeddings
+from app.deps import get_vs
 from app.ingestion.loader import load_single_file, split_with_visibility, load_docs, split_docs
 from app.config import settings
 import time
@@ -15,10 +16,18 @@ import uuid
 from pathlib import Path
 from typing import Optional
 import chromadb
+
 from app.db.redis_session import load_session, save_session
+from app.auth import router as auth_router, UserInDB, get_current_user_optional, get_current_user
+from app.rbac import get_user_roles, get_user_permissions
+from app.perm import require_permission
 SESSIONS: dict[str, dict] = {}  # # ⚠️加这一行
 
 app = FastAPI(title="Enterprise KB Assistant")
+app.include_router(auth_router)
+
+DATA_DOCS_DIR = Path("./data/docs")
+DATA_DOCS_DIR.mkdir(parents=True, exist_ok=True)
 
 class ChatReq(BaseModel):
     text: str
@@ -31,12 +40,46 @@ class ChatResp(BaseModel):
     session_id: Optional[str] = None    # ⚠️添加
     active_route: Optional[str] = None  # ⚠️添加
 
+@app.get("/whoami") # ‼️测试一下而已
+def whoami(current_user: UserInDB = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "roles": get_user_roles(current_user.id),
+        "permissions": sorted(list(get_user_permissions(current_user.id))),
+        "is_super_admin": current_user.is_super_admin,
+    }
 @app.post("/chat", response_model=ChatResp)
-def chat(req: ChatReq):
+def chat(
+    req: ChatReq,
+    current_user: UserInDB | None = Depends(get_current_user_optional), # ‼️
+):
     payload = req.model_dump()
-    text = payload.get("text") or payload.get("question") or ""
+    text = payload.get("text") or ""
 
-    # 1) get or create session id
+    # 0) 统一构造可信身份上下文
+    if current_user:
+        payload["requester"] = current_user.username
+        payload["user_id"] = current_user.id
+
+        roles = get_user_roles(current_user.id)
+        perms = sorted(list(get_user_permissions(current_user.id)))
+
+        payload["roles"] = roles
+        payload["permissions"] = perms
+        payload["user_role"] = roles[0] if roles else "public"
+
+        # ‼️ /chat基础门槛：至少能看公共KB（这个后续也可以改成必须登录，看情况吧）
+        require_permission(current_user, "kb.view_public")
+    else:
+        # ‼️ 匿名：绝不信任客户端传的任何角色/用户
+        payload["requester"] = "anonymous"
+        payload["user_id"] = None
+        payload["roles"] = ["anonymous"]
+        payload["permissions"] = ["kb.view_public"]
+        payload["user_role"] = "anonymous"
+
+    # 1) session id
     sid = payload.get("session_id") or f"sid-{uuid.uuid4().hex[:10]}"
     payload["session_id"] = sid
 
@@ -55,26 +98,26 @@ def chat(req: ChatReq):
     save_session(sid, new_state)
 
     return {
-        "answer": out.get("answer"),
+        "answer": out.get("answer", ""),
         "session_id": sid,
         "active_route": new_state.get("active_route"),
     }
 
 
-DATA_DOCS_DIR = Path("./data/docs")
-DATA_DOCS_DIR.mkdir(parents=True, exist_ok=True)
-
 @app.post("/ingest")
 async def ingest(
     file: UploadFile = File(...),
     visibility: str = Form("public"),
-    doc_id: Optional[str] = Form(None)):
+    doc_id: Optional[str] = Form(None),
+    current_user: UserInDB = Depends(get_current_user),  # ‼️ 必须登录
+):
+    # ‼️ 只有有权限的人才能上传
+    require_permission(current_user, "kb.manage_docs")
 
     if not file.filename:
         raise HTTPException(status_code=400, detail="Empty filename")
 
     visibility = (visibility or "public").strip().lower()
-
     suffix = Path(file.filename).suffix
     safe_name = f"{int(time.time())}_{uuid.uuid4().hex}{suffix}"
     save_path = DATA_DOCS_DIR / safe_name
@@ -92,6 +135,10 @@ async def ingest(
 
     vs = get_vs()
     vs.add_documents(chunks)
+    try:
+        vs.persist()
+    except Exception:
+        pass
 
     return {
         "saved_as": str(save_path),
@@ -102,14 +149,20 @@ async def ingest(
 
 
 @app.post("/reindex")
-def reindex(visibility_default: str = Form("public")):
+def reindex(
+    visibility_default: str = Form("public"),
+    current_user: UserInDB = Depends(get_current_user),  # ‼️必须登录
+):
+    # ‼️只有有权限的人才能重建索引
+    require_permission(current_user, "kb.manage_docs")
+
     visibility_default = (visibility_default or "public").strip().lower()
 
     client = chromadb.HttpClient(host=settings.chroma_host, port=settings.chroma_port)
     try:
         client.delete_collection(settings.collection_name)
     except Exception:
-        print('================删除chromadb报错了')
+        pass
     client.get_or_create_collection(settings.collection_name)
 
     vs = get_vs()
@@ -123,6 +176,10 @@ def reindex(visibility_default: str = Form("public")):
         c.metadata.setdefault("visibility", visibility_default)
 
     vs.add_documents(chunks)
+    try:
+        vs.persist()
+    except Exception:
+        pass
 
     return {"docs": len(raw_docs), "chunks": len(chunks), "visibility_default": visibility_default}
 
