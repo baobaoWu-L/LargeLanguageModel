@@ -3,9 +3,9 @@ from typing import Iterable, Callable, Any
 
 from fastapi import Depends, HTTPException, status
 
-from app.auth import get_current_user, UserInDB
-from app.db.rbac_db import get_user_permissions
-
+from auth.auth import get_current_user, UserInDB
+# from app.db.rbac_db import get_user_permissions
+from db.rbac import get_user_permissions
 # ----------------helper-----------------
 def _resolve_perms(*,
                    user: UserInDB | None = None,

@@ -3,7 +3,7 @@ from typing import TypedDict, List, Any
 from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import HumanMessage, AIMessage
 
-from app.rag.prompts import QA_SYSTEM, QA_USER
+from prompts.prompt import QA_SYSTEM,QA_USER
 from app.deps import get_llm, get_vs
 
 class QAState(TypedDict, total=False):

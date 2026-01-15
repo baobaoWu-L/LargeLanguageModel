@@ -9,11 +9,11 @@ from typing import Any, Dict
 from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.prompts.prompt import (TIME_USER,TIME_SYSTEM,SLOT_SYSTEM,SLOT_USER)
+from prompts.prompt import (TIME_USER, TIME_SYSTEM, SLOT_SYSTEM, SLOT_USER)
 from app.deps import get_llm
-from app.workflows.leave.models import LeaveState
-from app.workflows.leave.rules import validate_leave
-from app.db.leave_db import (
+from common.models import LeaveState
+from secu.rules import validate_leave
+from db.leave import (
     get_leave_balance,
     insert_leave_request,
     get_leave_request,

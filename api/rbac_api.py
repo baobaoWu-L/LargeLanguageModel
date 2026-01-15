@@ -4,10 +4,12 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.db import rbac_db
-from app.model.rbac_model import SetUserRolesReq, SetRolePermsReq
+# from app.model.rbac_model import SetUserRolesReq, SetRolePermsReq
 
-from app.security1.rbac.perm import require_permission
-from app.security1.rbac.Permission_codes import Permission
+from model.rbac import SetUserRolesReq, SetRolePermsReq
+from rbac.perm import require_permission
+from common.rbac import Permission
+# from app.security1.rbac.Permission_codes import Permission
 
 router = APIRouter(prefix="/rbac", tags=["rbac"])
 

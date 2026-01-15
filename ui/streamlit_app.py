@@ -30,13 +30,13 @@ st.markdown(
 )
 
 st.markdown("<h1>🏢 Enterprise Knowledge Assistant</h1>", unsafe_allow_html=True)
-st.markdown('<div class="small">Upload policies / ask questions / see citations.</div>', unsafe_allow_html=True)
+st.markdown('<div class1="small">Upload policies / ask questions / see citations.</div>', unsafe_allow_html=True)
 st.write("")
 
 col1, col2 = st.columns([0.38, 0.62], gap="large")
 
 with col1:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown('<div class1="card">', unsafe_allow_html=True)
     st.subheader("📎 文档上传入库")
     uploaded = st.file_uploader("选择 Word/PDF/MD/TXT", type=["pdf","docx","doc","md","txt"])
     visibility = st.selectbox("可见性", ["public", "hr", "finance", "it"], index=0)
@@ -61,7 +61,7 @@ with col1:
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown('<div class1="card">', unsafe_allow_html=True)
     st.subheader("💬 企业知识问答")
     q = st.text_area("输入你的问题", height=120, placeholder="例如：年假需要提前多久申请？")
     role = st.selectbox("你的角色", ["public", "hr", "finance", "it_admin", "manager"], index=0)

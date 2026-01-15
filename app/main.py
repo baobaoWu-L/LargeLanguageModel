@@ -6,10 +6,9 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from pydantic import BaseModel
 
-
 from app.router_graph import router_graph
 from app.deps import get_vs
-from app.ingestion.loader import load_single_file, split_with_visibility, load_docs, split_docs
+from rag_docs.loader import load_single_file, split_with_visibility, load_docs, split_docs
 from app.config import settings
 import time
 import uuid
@@ -17,11 +16,13 @@ from pathlib import Path
 from typing import Optional
 import chromadb
 
-from app.api.rbac_api import router as rbac_router
-from app.db.redis_session import load_session, save_session
-from app.auth import router as auth_router, UserInDB, get_current_user_optional, get_current_user
-from app.db.rbac_db import get_user_roles, get_user_permissions
-from app.security1.rbac.perm import require_permission
+from api.rbac_api import router as rbac_router
+from db.redis_session import load_session, save_session
+from auth.auth import router as auth_router, UserInDB, get_current_user_optional, get_current_user
+# from app.db.rbac_db import get_user_roles, get_user_permissions
+from db.rbac import get_user_roles,get_user_permissions
+from rbac.perm import require_permission
+
 SESSIONS: dict[str, dict] = {}  # # ⚠️加这一行
 
 app = FastAPI(title="Enterprise KB Assistant")
@@ -190,7 +191,7 @@ def reindex(
 def root():
     return {"status": "ok", "docs": "/docs"}
 
-# class ChatReq(BaseModel):
+# class1 ChatReq(BaseModel):
 # uvicorn app.main:app --reload --port 8002 启动服务器
 # uvicorn app.main:app --reload --host 0.0.0.0 --port 8002
 # curl -X POST http://127.0.0.1:8002/chat \

@@ -1,7 +1,7 @@
 from langchain_community.chat_models import ChatTongyi
 from langchain_community.embeddings import DashScopeEmbeddings
 from app.config import settings
-from app.rag.vectorstore import get_vectorstore
+from db.vectorstore import get_vectorstore
 
 def get_llm():  # 配置一个大语言模型，此处用的是deepseek
     return ChatTongyi(
