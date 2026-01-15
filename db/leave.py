@@ -3,7 +3,7 @@ import pymysql
 from contextlib import contextmanager
 from typing import Any
 
-from app.db.mysql import get_conn
+from db.mysql import get_conn
 
 
 def get_leave_balance(requester: str) -> dict | None:

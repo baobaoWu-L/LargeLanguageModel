@@ -199,7 +199,7 @@ def root():
 # 测试4个cutl
 # curl -X POST http://127.0.0.1:8002/chat \
 #   -H "Content-Type: application/json" \
-#   -d '{"text":"我下周二想请一天年假","user_role":"public","requester":"peter"}'
+#   -d '{"text":"我下周二想请一天年假","user_role":"public","requester":"LoveBreaker"}'
 # 得到下面json
 # {"answer":"请确认你的请假信息：\n- 类型：annual\n- 开始：2025-11-28 09:00\n- 结束：2025-11-28 18:00\n- 时长：1.12 天\n- 原因：无\n回复“确认”提交，或直接回复修改后的信息。","session_id":"sid-52bdc79daf","active_route":"leave"}%
 #
@@ -222,6 +222,8 @@ def root():
 # curl -X POST http://127.0.0.1:8002/chat \
 #   -H "Content-Type: application/json" \
 #   -d '{"text":"查我的请假状态 LV-c4eda0c8","user_role":"public","requester":"LoveBreaker"}'
+
+
 
 # TOKEN =$(curl - s - X POST http: // 127.0.0.1:8002 / auth / login \
 #     -H 'Content-Type: application/json' \
