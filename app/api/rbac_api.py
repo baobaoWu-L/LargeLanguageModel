@@ -8,7 +8,7 @@ from app.db import rbac_db
 
 from model.rbac import SetUserRolesReq, SetRolePermsReq
 from rbac.perm import require_permission
-from common.rbac import Permission
+from app.common.rbac import Permission
 # from app.security1.rbac.Permission_codes import Permission
 
 router = APIRouter(prefix="/rbac", tags=["rbac"])

@@ -18,7 +18,7 @@ import chromadb
 
 from api.rbac_api import router as rbac_router
 from db.redis_session import load_session, save_session
-from auth.auth import router as auth_router, UserInDB, get_current_user_optional, get_current_user
+from app.auth.auth import router as auth_router, UserInDB, get_current_user_optional, get_current_user
 # from app.db.rbac_db import get_user_roles, get_user_permissions
 from db.rbac import get_user_roles,get_user_permissions
 from rbac.perm import require_permission

@@ -11,7 +11,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from prompts.prompt import (TIME_USER, TIME_SYSTEM, SLOT_SYSTEM, SLOT_USER)
 from app.deps import get_llm
-from common.models import LeaveState
+from app.common import LeaveState
 from secu.rules import validate_leave
 from db.leave import (
     get_leave_balance,

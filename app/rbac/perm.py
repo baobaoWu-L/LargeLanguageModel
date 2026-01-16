@@ -3,7 +3,7 @@ from typing import Iterable, Callable, Any
 
 from fastapi import Depends, HTTPException, status
 
-from auth.auth import get_current_user, UserInDB
+from app.auth.auth import get_current_user, UserInDB
 # from app.db.rbac_db import get_user_permissions
 from db.rbac import get_user_permissions
 # ----------------helper-----------------

@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 
 from db.auth import (get_user_by_username,create_user,update_last_login)
-from common.auth import RegisterReq, LoginReq, TokenResp, UserInDB
+from app.common.auth import RegisterReq, LoginReq, TokenResp, UserInDB
 # from app.db.mysql import get_conn
 from secu.security import verify_password, create_access_token, decode_token
 

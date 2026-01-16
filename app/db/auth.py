@@ -1,6 +1,6 @@
 from datetime import datetime
 from db.mysql import get_conn
-from common.auth import RegisterReq
+from app.common.auth import RegisterReq
 from secu.security import hash_password
 
 
